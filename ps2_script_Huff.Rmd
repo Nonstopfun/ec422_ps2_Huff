@@ -1,0 +1,174 @@
+
+```{r}
+#Load Libraries
+library(tidyquant)
+library(tidyverse)
+```
+
+```{r}
+# 3.1,2 Load Data
+
+# unemp_raw <- tq_get(
+#   c("UNRATE", "ORUR", "CAUR", "TXUR", "NYUR"),
+#   get  = "economic.data",
+#   from = "1976-01-01"
+# )
+# head(unemp_raw)
+# dir.create("data", showWarnings = FALSE)
+# write_rds(unemp_raw, "data/unemp_raw.rds")
+
+unemp_raw = read_rds("data/unemp_raw.rds")
+
+```
+
+
+```{r}
+# Rename the data 4.1
+unemp <- unemp_raw |>
+rename(unemployment_rate = price) |>
+mutate(
+region = case_when(
+symbol == "UNRATE" ~ "United States",
+symbol == "ORUR" ~ "Oregon",
+symbol == "CAUR" ~ "California",
+symbol == "TXUR" ~ "Texas",
+symbol == "NYUR" ~ "New York"
+)
+)
+```
+
+
+```{r}
+#  4.2 Wrangle the data
+# 4.2 Wrangle the data
+unemp <- unemp |>
+arrange(region, date) |>
+group_by(region) |>
+mutate(
+unemployment_rate = replace(
+unemployment_rate,
+date == as.Date("2025-10-01"),
+unemployment_rate[date == as.Date("2025-09-01")]
+)
+) |>
+ungroup()
+
+unemp <- unemp |>
+arrange(region, date) |>
+group_by(region) |>
+mutate(unemployment_rate_change = unemployment_rate - lag(unemployment_rate)) |>
+ungroup()
+
+unemp_recent <- unemp |>
+filter(date >= as.Date("2015-01-01"))
+
+unemp_summary <- unemp |>
+group_by(region) |>
+summarize(
+mean_rate = mean(unemployment_rate, na.rm = TRUE),
+min_rate  = min(unemployment_rate,  na.rm = TRUE),
+max_rate  = max(unemployment_rate,  na.rm = TRUE)
+)
+
+unemp_recent_summary <- unemp_recent |>
+group_by(region) |>
+summarize(
+mean_rate = mean(unemployment_rate, na.rm = TRUE),
+min_rate  = min(unemployment_rate,  na.rm = TRUE),
+max_rate  = max(unemployment_rate,  na.rm = TRUE)
+)
+```
+
+```{r}
+# 4.3 
+unemp_top_increases <- unemp |>
+slice_max(unemployment_rate_change, n = 5, with_ties = TRUE)
+
+unemp_top_decreases <- unemp |>
+slice_min(unemployment_rate_change, n = 5, with_ties = TRUE)
+```
+
+```{r}
+# 4.4
+unemp_no_2020 <- unemp |>
+filter(format(date, "%Y") != "2020")
+
+unemp_top_increases_no_covid <- unemp_no_2020 |>
+slice_max(unemployment_rate_change, n = 5, with_ties = TRUE)
+
+unemp_top_decreases_no_covid <- unemp_no_2020 |>
+slice_min(unemployment_rate_change, n = 5, with_ties = TRUE)
+
+```
+
+```{r}
+# Part 5.1
+ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
+geom_line() + 
+labs(
+title = "Monthly Unemployment Rates by Region", 
+x = "Date", 
+y = "Unemployment Rate",
+color = "Region"
+) + 
+theme_minimal()
+```
+
+
+```{r}
+#5.2
+ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
+geom_line() + 
+facet_wrap(~ region) + 
+labs(
+title = "Monthly Unemployment Rates by Region", 
+x = "Date", 
+y = "Unemployment Rate",
+color = "Region"
+) + 
+theme_minimal()
+```
+
+
+```{r}
+# 5.3
+ggplot(unemp_summary, aes(x = fct_reorder(region, mean_rate), y = mean_rate, fill = region)) + 
+geom_col() + 
+labs(
+title = "Mean Unemployment Rate by Region", 
+x = "Region", 
+y = "Mean Unemployment Rate"
+) + 
+theme_minimal() +
+theme(legend.position = "none")
+
+```
+
+
+```{r}
+# 5.4
+unemp_tx_ny <- unemp |>
+  filter(region %in% c("Texas", "New York"))
+
+ggplot(unemp_tx_ny, aes(x = date, y = unemployment_rate, color = region)) +
+  geom_line(linewidth = 0.8) +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+  labs(
+    title = "Unemployment Rate Comparison: Texas vs. New York",
+    subtitle = "Monthly trends highlighting differing economic shocks and recoveries",
+    x = "Date",
+    y = "Unemployment Rate (%)",
+    color = "State"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+# Summary of the analysis
+
+The two states I choose to plot are Texas and New York. The unemployment rates for these two states show different trends over time, reflecting their unique economic conditions and responses to various shocks, such as the COVID-19 pandemic. I try making the date breaks every 2 years to make the x-axis more readable.
+
+
