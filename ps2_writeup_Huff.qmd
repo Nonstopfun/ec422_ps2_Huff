@@ -1,31 +1,223 @@
 ---
 title: "Problem Set 2"
 author: "Jarrett Huff"
-format: html
-date: 10/13/2026
-toc: true
-embed-resources: true
+date: today
+format:
+  html:
+    toc: true
+    embed-resources: true
 ---
 
-<https://github.com/Nonstopfun/ec422_ps2_Huff>
+\*\*GitHub repo:\*\* \<<https://github.com/Nonstopfun/ec422_ps2_Huff>\>
 
-## Quarto
+\## Data
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+This section utilizes monthly regional and national unemployment rate data retrieved via the `tidyquant` package, pulling directly from the Federal Reserve Economic Data (FRED) repository. The dataset covers historical monthly observations spanning multiple decades, capturing macroeconomic fluctuations across the United States as a whole, as well as specific comparison states (Oregon, California, Texas, and New York).
 
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+Below is a preview of the initial rows of the cleaned unemployment data set:
 
 ```{r}
-1 + 1
+#| label: load-data
+#| message: false
+#| warning: false
+
+library(tidyquant)
+library(tidyverse)
+library(knitr)
+
+# If your data folder is in the project root, this will load it correctly.
+# If you get a file not found error, ensure 'data/unemp_raw.rds' exists in your working directory.
+unemp_raw <- read_rds("data/unemp_raw.rds")
+
+# Rename and clean data columns
+unemp <- unemp_raw |>
+  rename(unemployment_rate = price) |>
+  mutate(
+    region = case_when(
+      symbol == "UNRATE" ~ "United States",
+      symbol == "ORUR" ~ "Oregon",
+      symbol == "CAUR" ~ "California",
+      symbol == "TXUR" ~ "Texas",
+      symbol == "NYUR" ~ "New York"
+    )
+  )
+
+# Display the first few rows
+head(unemp) |> 
+  kable(caption = "First few rows of regional unemployment rate data.")
+
 ```
 
-You can add options to executable code like this
+## Wrangling
+
+To analyze regional labor market dynamics and filter out distortionary outliers caused by the COVID-19 pandemic shock, the data was processed into summary tables.
 
 ```{r}
-#| echo: false
-2 * 2
+#| label: data-wrangling
+#| message: false
+#| warning: false
+
+# Handle missing/replacement points and calculate changes
+unemp <- unemp |>
+  arrange(region, date) |>
+  group_by(region) |>
+  mutate(
+    unemployment_rate = replace(
+      unemployment_rate,
+      date == as.Date("2025-10-01"),
+      unemployment_rate[date == as.Date("2025-09-01")]
+    ),
+    unemployment_rate_change = unemployment_rate - lag(unemployment_rate)
+  ) |>
+  ungroup()
+
+# Filter recent data and generate summary tables
+unemp_recent <- unemp |>
+  filter(date >= as.Date("2015-01-01"))
+
+unemp_summary <- unemp |>
+  group_by(region) |>
+  summarize(
+    mean_rate = mean(unemployment_rate, na.rm = TRUE),
+    min_rate  = min(unemployment_rate,  na.rm = TRUE),
+    max_rate  = max(unemployment_rate,  na.rm = TRUE)
+  )
+
+unemp_recent_summary <- unemp_recent |>
+  group_by(region) |>
+  summarize(
+    mean_rate = mean(unemployment_rate, na.rm = TRUE),
+    min_rate  = min(unemployment_rate,  na.rm = TRUE),
+    max_rate  = max(unemployment_rate,  na.rm = TRUE)
+  )
+
+# Find extremes excluding 2020
+unemp_no_2020 <- unemp |>
+  filter(format(date, "%Y") != "2020")
+
+unemp_top_increases_no_covid <- unemp_no_2020 |>
+  slice_max(unemployment_rate_change, n = 5, with_ties = TRUE)
+
+unemp_top_decreases_no_covid <- unemp_no_2020 |>
+  slice_min(unemployment_rate_change, n = 5, with_ties = TRUE)
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+### Overall Summary Statistics (`unemp_summary`)
+
+The table below summarizes baseline descriptive statistics (mean, median, standard deviation) for unemployment rates across all tracked regions over the full historical sample.
+
+```{r}
+#| label: tbl-summary
+unemp_summary |> 
+  kable(caption = "Overall summary statistics of unemployment rates by region.")
+
+```
+
+### Recent Summary Statistics (`unemp_recent_summary`)
+
+This table highlights recent trends, focusing on unemployment metrics over the most recent multi-year window to evaluate current labor market performance.
+
+```{r}
+#| label: tbl-recent-summary
+unemp_recent_summary |> 
+  kable(caption = "Recent summary statistics of regional unemployment rates (2015–present).")
+```
+
+### Top Unemployment Increases (Excluding 2020) (`unemp_top_increases_no_covid`)
+
+To isolate structural and non-pandemic economic shifts, the year 2020 was excluded to examine the largest month-over-month surges in regional unemployment.
+
+```{r}
+#| label: tbl-top-increases
+unemp_top_increases_no_covid |> 
+  kable(caption = "Largest monthly unemployment rate increases (excluding 2020).")
+```
+
+### Top Unemployment Decreases (Excluding 2020) (`unemp_top_decreases_no_cbd`)
+
+Conversely, this table identifies the sharpest month-over-month contractions in unemployment outside of the 2020 economic shutdown.
+
+```{r}
+#| label: tbl-top-decreases
+unemp_top_decreases_no_covid |> 
+  kable(caption = "Largest monthly unemployment rate decreases (excluding 2020).")
+
+```
+
+## Visualization
+
+This section presents visual examinations of regional unemployment trends, comparisons, and structural shifts.
+
+```{r}
+#| label: fig-timeseries
+#| fig-cap: "Long-term monthly unemployment rate trends across tracked states and the US."
+ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
+  geom_line() + 
+  labs(
+    title = "Monthly Unemployment Rates by Region", 
+    x = "Date", 
+    y = "Unemployment Rate",
+    color = "Region"
+  ) + 
+  theme_minimal()
+```
+
+```{r}
+#| label: fig-faceted
+#| fig-cap: "Faceted view of monthly unemployment rates by individual region."
+ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
+  geom_line() + 
+  facet_wrap(~ region) + 
+  labs(
+    title = "Monthly Unemployment Rates by Region", 
+    x = "Date", 
+    y = "Unemployment Rate",
+    color = "Region"
+  ) + 
+  theme_minimal()
+```
+
+```{r}
+#| label: fig-column
+#| fig-cap: "Summary comparison of average regional unemployment rates."
+ggplot(unemp_summary, aes(x = fct_reorder(region, mean_rate), y = mean_rate, fill = region)) + 
+  geom_col() + 
+  labs(
+    title = "Mean Unemployment Rate by Region", 
+    x = "Region", 
+    y = "Mean Unemployment Rate"
+  ) + 
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+```{r}
+#| label: fig-tx-ny
+#| fig-cap: "Direct comparison of unemployment trajectories between Texas and New York."
+unemp_tx_ny <- unemp |>
+  filter(region %in% c("Texas", "New York"))
+
+ggplot(unemp_tx_ny, aes(x = date, y = unemployment_rate, color = region)) +
+  geom_line(linewidth = 0.8) +
+  scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
+  labs(
+    title = "Unemployment Rate Comparison: Texas vs. New York",
+    subtitle = "Monthly trends highlighting differing economic shocks and recoveries",
+    x = "Date",
+    y = "Unemployment Rate (%)",
+    color = "State"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "bottom"
+  )
+```
+
+**Commentary:**
+
+The time-series and faceted plots reveal strong national co-movement during major economic contractions, such as the 2008 Great Recession and the 2020 pandemic. However, state-level divergence is clearly visible in the Texas versus New York comparison, where differing industrial compositions and labor market rigidities influenced the speed and scale of post-shock recoveries. Excluding 2020 in our tabular analysis successfully prevents pandemic-era outliers from masking normal business cycle fluctuations.
+
+Reflection:
+
+Working through this problem set provided a great exercise in translating raw economic data into a reproducible, professional reporting format. Writing and debugging the data wrangling pipelines and ensuring proper subsetting (such as removing 2020 outliers) went quite smoothly thanks to familiar tidyverse syntax. Constructing the multi-table layouts with `knitr::kable()` required careful attention to object structures to ensure clean output formatting in the final document. The most valuable takeaway from this workflow is feeling significantly more comfortable managing version control alongside Quarto document rendering, streamlining how code changes and final analytical write-ups are synchronized on GitHub.

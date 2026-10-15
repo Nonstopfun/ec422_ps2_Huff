@@ -1,12 +1,18 @@
 
-```{r}
-#Load Libraries
+# ===================================
+# Script Name: ps2_script_Huff.R
+# Purpose: Assignment 2
+# Author: Jarrett Huff
+# ===================================
+
+
+# 3.1 Load Libraries ----------------
+
 library(tidyquant)
 library(tidyverse)
-```
 
-```{r}
-# 3.1,2 Load Data
+
+# 3.2 Load Data =====================
 
 # unemp_raw <- tq_get(
 #   c("UNRATE", "ORUR", "CAUR", "TXUR", "NYUR"),
@@ -19,11 +25,8 @@ library(tidyverse)
 
 unemp_raw = read_rds("data/unemp_raw.rds")
 
-```
 
-
-```{r}
-# Rename the data 4.1
+# Rename the data 4.1 =====================
 unemp <- unemp_raw |>
 rename(unemployment_rate = price) |>
 mutate(
@@ -35,12 +38,9 @@ symbol == "TXUR" ~ "Texas",
 symbol == "NYUR" ~ "New York"
 )
 )
-```
 
 
-```{r}
-#  4.2 Wrangle the data
-# 4.2 Wrangle the data
+# 4.2 Wrangle the data =====================
 unemp <- unemp |>
 arrange(region, date) |>
 group_by(region) |>
@@ -77,19 +77,17 @@ mean_rate = mean(unemployment_rate, na.rm = TRUE),
 min_rate  = min(unemployment_rate,  na.rm = TRUE),
 max_rate  = max(unemployment_rate,  na.rm = TRUE)
 )
-```
 
-```{r}
-# 4.3 
+
+# 4.3 Find the Extremes ===================== 
 unemp_top_increases <- unemp |>
 slice_max(unemployment_rate_change, n = 5, with_ties = TRUE)
 
 unemp_top_decreases <- unemp |>
 slice_min(unemployment_rate_change, n = 5, with_ties = TRUE)
-```
 
-```{r}
-# 4.4
+
+# 4.4 Find the Extremes Excluding 2020 =====================
 unemp_no_2020 <- unemp |>
 filter(format(date, "%Y") != "2020")
 
@@ -99,10 +97,8 @@ slice_max(unemployment_rate_change, n = 5, with_ties = TRUE)
 unemp_top_decreases_no_covid <- unemp_no_2020 |>
 slice_min(unemployment_rate_change, n = 5, with_ties = TRUE)
 
-```
 
-```{r}
-# Part 5.1
+# 5.1 Produce a Line Plot =====================
 ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
 geom_line() + 
 labs(
@@ -112,11 +108,10 @@ y = "Unemployment Rate",
 color = "Region"
 ) + 
 theme_minimal()
-```
 
 
-```{r}
-#5.2
+# 5.2 Produce Individual Line Plots using facet_wrap() ===================== 
+
 ggplot(unemp, aes(x = date, y = unemployment_rate, color = region)) + 
 geom_line() + 
 facet_wrap(~ region) + 
@@ -127,11 +122,8 @@ y = "Unemployment Rate",
 color = "Region"
 ) + 
 theme_minimal()
-```
 
-
-```{r}
-# 5.3
+# 5.3 Produce a Bar Chart =====================
 ggplot(unemp_summary, aes(x = fct_reorder(region, mean_rate), y = mean_rate, fill = region)) + 
 geom_col() + 
 labs(
@@ -142,11 +134,9 @@ y = "Mean Unemployment Rate"
 theme_minimal() +
 theme(legend.position = "none")
 
-```
 
 
-```{r}
-# 5.4
+# 5.4 My choice of plot  =====================
 unemp_tx_ny <- unemp |>
   filter(region %in% c("Texas", "New York"))
 
@@ -165,10 +155,10 @@ ggplot(unemp_tx_ny, aes(x = date, y = unemployment_rate, color = region)) +
     axis.text.x = element_text(angle = 45, hjust = 1),
     legend.position = "bottom"
   )
-```
+
 
 # Summary of the analysis
 
-The two states I choose to plot are Texas and New York. The unemployment rates for these two states show different trends over time, reflecting their unique economic conditions and responses to various shocks, such as the COVID-19 pandemic. I try making the date breaks every 2 years to make the x-axis more readable.
+#The two states I choose to plot are Texas and New York. The unemployment rates for these two states show different trends over time, reflecting their unique economic conditions and responses to various shocks, such as the COVID-19 pandemic. I tried making the date breaks every 2 years to make the x-axis more readable.
 
 
